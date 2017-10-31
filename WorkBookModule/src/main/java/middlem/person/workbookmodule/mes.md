@@ -1,0 +1,1324 @@
+#设计模式详解
+=====
+###1：关于设计模式
+>	在java中有多种设计模式，而设计模式都是为了满足Java编程思想而设计的，如何在应用当中更好的实现java编程思想：
+
+*	java编程思想(六大原则)：
+
+	1. **开闭原则：**	对扩展开放，对修改关闭
+	2. **里氏代替原则：** 任何基类可以出现的地方，子类一定会出现，简单点来说就是抽象的具体实现
+	3. **依赖倒置原则：** 依赖抽象，而不依赖具体（接口）
+	4. **接口隔离原则：** 使用多个接口，不要使用多个接口，降低耦合
+	5. **迪米特法则（最好知道原则）：**  一个类中尽量少的与其他实体发生相互作用，使模块间实体间降低耦合
+	6. **合成复用原则：**尽量使用复用/聚合的方式构成，少用继承
+
+###2： 工厂设计模式（简单和抽象）
+> 工厂设计模式的体现就在于利用接口的方式，构造不同的功能，在不同实现类中实现具体的功能，功能整合到接口中
+>
+>抽象工厂的实现模式，其实就是在简单工厂模式的基础上，将每个功能更加的抽象化，在增加实体的时候只需要实现自己功能的接口即可
+
+###3.单例设计模式
+>应用中对创建比较频繁的类，应该让他不要每次都进行创建，毕竟创建一个对象的消耗还是很大的，创建一个单例可以有效的避免内存的使用，减少gc的压力，同时能够提高应用的效率，Android系统中对应用的效率还是有比较高的要求的 。但是实现一个单例方式也不是很简单，怎样才能确保唯一性，以下是实现单例的几种模式：
+
+```java
+public class Singleton {  
+  
+    /* 持有私有静态实例，防止被引用，此处赋值为null，目的是实现延迟加载 */  
+    private static Singleton instance = null;  
+  
+    /* 私有构造方法，防止被实例化 */  
+    private Singleton() {  
+    }  
+  
+    /* 静态工程方法，创建实例 */  
+    public static Singleton getInstance() {  
+        if (instance == null) {  
+            instance = new Singleton();  
+        }  
+        return instance;  
+    }  
+  
+    /* 如果该对象被用于序列化，可以保证对象在序列化前后保持一致 */  
+    public Object readResolve() {  
+        return instance;  
+    }  
+}  
+
+```
+>这种实现可以在单线程中有效的运行，但是在多线程中毫无安全保证，这时我们就想到了加锁synchronized关键字
+
+```
+    /* 静态工程方法，创建实例 */  
+    public static synchronized	Singleton getInstance() {  
+        if (instance == null) {  
+            instance = new Singleton();  
+        }  
+        return instance;  
+    }  
+
+```
+>可是这样造成每次getInstance的时候都会有把锁，这样会影响运行的效率，再次修改
+
+```
+public static Singleton getInstance(){
+		if(instance==null){
+		syncronized(Singletong){
+		if(instance==null)
+		  instance=new Singleton();
+				}
+			}			
+			return instance;
+	
+}
+```
+> 貌似完美的解决了性能问题，可是java机制中，对象的创建和赋值操作是分两步进行的，但是JVM并不保证这两个操作的先后顺序，也就是说有可能JVM会为新的Singleton实例分配空间，然后直接赋值给instance成员，然后再去初始化这个Singleton实例。这样就可能出错了，我们以A、B两个线程为例：
+> 
+>>a>	A、B线程同时进入了第一个if判断
+>>b>	A首先进入synchronized块，由于instance为null，所以它执行instance = new Singleton();
+
+>>c>	由于JVM内部的优化机制，JVM先画出了一些分配给Singleton实例的空白内存，并赋值给instance成员（注意此时JVM没有开始初始化这个实例），然后A离开了synchronized块。
+
+>>d>	B进入synchronized块，由于instance此时不是null，因此它马上离开了synchronized块并将结果返回给调用该方法的程序。
+
+>>e>	此时B线程打算使用Singleton实例，却发现它没有被初始化，于是错误发生了。
+
+>继续完善：
+
+```public class Singleton {  
+  
+    /* 私有构造方法，防止被实例化 */  
+    private Singleton() {  
+    }  
+  
+    /* 此处使用一个内部类来维护单例 */  
+    private static class SingletonFactory {  
+        private static Singleton instance = new Singleton();  
+    }  
+  
+    /* 获取实例 */  
+    public static Singleton getInstance() {  
+        return SingletonFactory.instance;  
+    }  
+  
+    /* 如果该对象被用于序列化，可以保证对象在序列化前后保持一致 */  
+    public Object readResolve() {  
+        return getInstance();  
+    }  
+}  
+
+```
+
+----------
+```
+public class SingletonTest {  
+  
+    private static SingletonTest instance = null;  
+  
+    private SingletonTest() {  
+    }  
+  
+    private static synchronized void syncInit() {  
+        if (instance == null) {  
+            instance = new SingletonTest();  
+        }  
+    }  
+  
+    public static SingletonTest getInstance() {  
+        if (instance == null) {  
+            syncInit();  
+        }  
+        return instance;  
+    }  
+}  
+```
+
+>总结：synchronized关键字锁定的是对象，在用的时候，一定要在恰当的地方使用（注意需要使用锁的对象和过程，可能有的时候并不是整个对象及整个过程都需要锁）。
+
+>>采用类的静态方法，实现单例模式的效果，也是可行的，此处二者有什么不同？
+
+>>首先，静态类不能实现接口。（从类的角度说是可以的，但是那样就破坏了静态了。因为接口中不允许有static修饰的方法，所以即使实现了也是非静态的）
+其次，单例可以被延迟初始化，静态类一般在第一次加载是初始化。之所以延迟加载，是因为有些类比较庞大，所以延迟加载有助于提升性能。
+>>再次，单例类可以被继承，他的方法可以被覆写。但是静态类内部方法都是static，无法被覆写。
+
+>最后一点，单例类比较灵活，毕竟从实现上只是一个普通的Java类，只要满足单例的基本需求，你可以在里面随心所欲的实现一些其它功能，但是静态类不行。从上面这些概括中，基本可以看出二者的区别，但是，从另一方面讲，我们上面最后实现的那个单例模式，内部就是用一个静态类来实现的，所以，二者有很大的关联，只是我们考虑问题的层面不同罢了。两种思想的结合，才能造就出完美的解决方案，就像HashMap采用数组+链表来实现一样，其实生活中很多事情都是这样，单用不同的方法来处理问题，总是有优点也有缺点，最完美的方法是，结合各个方法的优点，才能最好的解决问题！
+
+###4: 建造者模式
+>建造者模式针对的是一个复合对象，而工厂模式针对的是单个对象，建造者模式就是将对象结合，构造出一个符合功能逻辑的一个对象
+
+###5：原型模式
+>原型模式针对性的将一个对象保存，然后通过对象的克隆实现，实现对象的克隆
+
+```java
+public class Prototype implements Cloneable {  
+  
+    public Object clone() throws CloneNotSupportedException {  
+        Prototype proto = (Prototype) super.clone();  
+        return proto;  
+    }  
+}  
+```
+>很简单，一个原型类，只需要实现Cloneable接口，覆写clone方法，此处clone方法可以改成任意的名称，因为Cloneable接口是个空接口，你可以任意定义实现类的方法名，如cloneA或者cloneB，因为此处的重点是super.clone()这句话，super.clone()调用的是Object的clone()方法，而在Object类中，clone()是native的，具体怎么实现，我会在另一篇文章中，关于解读Java中本地方法的调用，此处不再深究。在这儿，我将结合对象的浅复制和深复制来说一下，首先需要了解对象深、浅复制的概念：
+
+>>浅复制：将一个对象复制后，基本数据类型的变量都会重新创建，而引用类型，指向的还是原对象所指向的。
+
+>>深复制：将一个对象复制后，不论是基本数据类型还有引用类型，都是重新创建的。简单来说，就是深复制进行了完全彻底的复制，而浅复制不彻底
+
+```java
+public class Prototype implements Cloneable, Serializable {  
+  
+    private static final long serialVersionUID = 1L;  
+    private String string;  
+  
+    private SerializableObject obj;  
+  
+    /* 浅复制 */  
+    public Object clone() throws CloneNotSupportedException {  
+        Prototype proto = (Prototype) super.clone();  
+        return proto;  
+    }  
+  
+    /* 深复制 */  
+    public Object deepClone() throws IOException, ClassNotFoundException {  
+  
+        /* 写入当前对象的二进制流 */  
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();  
+        ObjectOutputStream oos = new ObjectOutputStream(bos);  
+        oos.writeObject(this);  
+  
+        /* 读出二进制流产生的新对象 */  
+        ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray());  
+        ObjectInputStream ois = new ObjectInputStream(bis);  
+        return ois.readObject();  
+    }  
+  
+    public String getString() {  
+        return string;  
+    }  
+  
+    public void setString(String string) {  
+        this.string = string;  
+    }  
+  
+    public SerializableObject getObj() {  
+        return obj;  
+    }  
+  
+    public void setObj(SerializableObject obj) {  
+        this.obj = obj;  
+    }  
+  
+}  
+  
+class SerializableObject implements Serializable {  
+    private static final long serialVersionUID = 1L;  
+}  
+ 
+```
+>>要实现深复制，需要采用流的形式读入当前对象的二进制输入，再写出二进制数据对应的
+
+###6：适配器模式 ：
+适配器模式可以分为类的适配器，对象的适配器和接口的适配器
+>类适配器模式：如果希望将一个类转化成满足另一个新接口的类时，可以创建一个类，继承原有类，实现新接口
+>对象的适配器模式：当希望将一个对象转化成满足另一个接口的对象时，可创建一个wrapper类，让它持有原有对象，在wrapper类的方法中，调用实类即可
+>接口的适配器模式：当不愿实现一个接口的所有方法时，可以使用一个父类，实现该接口，自己的类实现该抽象
+
+
+适配器模式将某个类的接口转换成客户端期望的另一个接口表示，目的是消除由于接口不匹配所造成的类的兼容性问题。主要分为三类：类的适配器模式、对象的适配器模式、接口的适配器模式。首先，我们来看看类的适配器模式，先看类图：
+
+
+
+核心思想就是：有一个Source类，拥有一个方法，待适配，目标接口时Targetable，通过Adapter类，将Source的功能扩展到Targetable里，看代码：
+
+```
+public class Source {  
+  
+    public void method1() {  
+        System.out.println("this is original method!");  
+    }  
+}  
+[java] view plaincopy
+public interface Targetable {  
+  
+    /* 与原类中的方法相同 */  
+    public void method1();  
+  
+    /* 新类的方法 */  
+    public void method2();  
+}  
+[java] view plaincopy
+public class Adapter extends Source implements Targetable {  
+  
+    @Override  
+    public void method2() {  
+        System.out.println("this is the targetable method!");  
+    }  
+}  
+Adapter类继承Source类，实现Targetable接口，下面是测试类：
+
+[java] view plaincopy
+public class AdapterTest {  
+  
+    public static void main(String[] args) {  
+        Targetable target = new Adapter();  
+        target.method1();  
+        target.method2();  
+    }  
+}  
+输出：
+
+this is original method!
+this is the targetable method!
+
+这样Targetable接口的实现类就具有了Source类的功能。
+
+对象的适配器模式
+
+基本思路和类的适配器模式相同，只是将Adapter类作修改，这次不继承Source类，而是持有Source类的实例，以达到解决兼容性的问题。看图：
+只需要修改Adapter类的源码即可：
+
+[java] view plaincopy
+public class Wrapper implements Targetable {  
+  
+    private Source source;  
+      
+    public Wrapper(Source source){  
+        super();  
+        this.source = source;  
+    }  
+    @Override  
+    public void method2() {  
+        System.out.println("this is the targetable method!");  
+    }  
+  
+    @Override  
+    public void method1() {  
+        source.method1();  
+    }  
+}  
+测试类：
+
+```java
+public class AdapterTest {  
+  
+    public static void main(String[] args) {  
+        Source source = new Source();  
+        Targetable target = new Wrapper(source);  
+        target.method1();  
+        target.method2();  
+    }  
+} 
+```
+ 
+输出与第一种一样，只是适配的方法不同而已。
+
+第三种适配器模式是接口的适配器模式，接口的适配器是这样的：有时我们写的一个接口中有多个抽象方法，当我们写该接口的实现类时，必须实现该接口的所有方法，这明显有时比较浪费，因为并不是所有的方法都是我们需要的，有时只需要某一些，此处为了解决这个问题，我们引入了接口的适配器模式，借助于一个抽象类，该抽象类实现了该接口，实现了所有的方法，而我们不和原始的接口打交道，只和该抽象类取得联系，所以我们写一个类，继承该抽象类，重写我们需要的方法就行。看一下类图：
+
+
+
+这个很好理解，在实际开发中，我们也常会遇到这种接口中定义了太多的方法，以致于有时我们在一些实现类中并不是都需要。看代码：
+
+```java
+public interface Sourceable {  
+      
+    public void method1();  
+    public void method2();  
+}  
+
+public abstract class Wrapper2 implements Sourceable{       
+    public void method1(){}  
+    public void method2(){}  
+} 
+public class SourceSub1 extends Wrapper2 {  
+    public void method1(){  
+        System.out.println("the sourceable interface's first Sub1!");  
+    }  
+}  
+public class SourceSub2 extends Wrapper2 {  
+    public void method2(){  
+        System.out.println("the sourceable interface's second Sub2!");  
+    }  
+}  
+public class WrapperTest {  
+  
+    public static void main(String[] args) {  
+        Sourceable source1 = new SourceSub1();  
+        Sourceable source2 = new SourceSub2();  
+          
+        source1.method1();  
+        source1.method2();  
+        source2.method1();  
+        source2.method2();  
+    }  
+}  
+ 
+测试输出：
+
+the sourceable interface's first Sub1!
+the sourceable interface's second Sub2!
+```
+
+达到了我们的效果
+
+------------------
+###7:装饰者模式
+动态的给一个类添加一个新的功能，要求装饰者持有被装饰者的实例
+
+Source类是被装饰类，Decorator类是一个装饰类，可以为Source类动态的添加一些功能，代码如下：
+
+```java
+public interface Sourceable {  
+    public void method();  
+}  
+
+public class Source implements Sourceable {  
+  
+    @Override  
+    public void method() {  
+        System.out.println("the original method!");  
+    }  
+}  
+
+public class Decorator implements Sourceable {  
+  
+    private Sourceable source;  
+      
+    public Decorator(Sourceable source){  
+        super();  
+        this.source = source;  
+    }  
+    @Override  
+    public void method() {  
+        System.out.println("before decorator!");  
+        source.method();  
+        System.out.println("after decorator!");  
+    }  
+}  
+测试类：
+
+
+public class DecoratorTest {  
+  
+    public static void main(String[] args) {  
+        Sourceable source = new Source();  
+        Sourceable obj = new Decorator(source);  
+        obj.method();  
+    }  
+}  
+输出：
+
+before decorator!
+the original method!
+after decorator!
+```
+
+>装饰器模式的应用场景：
+
+>>1、需要扩展一个类的功能。
+
+>>2、动态的为一个对象增加功能，而且还能动态撤销。（继承不能做到这一点，继承的功能是静态的，不能动态增删。）
+
+>缺点：产生过多相似的对象，不易排错
+
+
+###8:代理模式 ：
+代理模式 就是为了扩展一个类，在一个类没有这个功能上，通过代理实现它的功能，划分功能需求
+
+
+```java
+public interface Sourceable{
+     void method();
+}
+
+//实体类
+public class Source implements Soureceable{
+   public void method(){
+   System.out.println("sourece");
+   }
+} 
+
+publicc class Proxy implements Sourceable{
+   private Source source;
+   
+   public Proxy(){
+      super();
+      this.source=new Source();
+   }
+   
+   public void metod(){
+      System.out.println("Proxy");
+      soure.method();
+   }
+ }
+```
+>代理模式就是采用一个代理类，去控制原有类的一些操作
+
+###外观模式：外观模式是为了解决类与类之间的耦合，不通过接口的形式，而是将他们的关系放在一个单独的类中，只需处理这个类即可
+
+```java
+public class Disk{
+    public void start(){
+      sout("disk  start")
+    }
+    public void shutdown（）
+    {
+    sout("disk shutdowm");
+    }
+}
+
+public class Cpu{
+ 	 public void start(){
+      sout("cpu  start")
+    }
+    public void shutdown（）
+    {
+    sout("cpu shutdowm");
+    } 
+	}
+	
+public class Computer{
+  private Disk disk;
+  
+  private Cpu 	cpu;
+  
+  public  Computer(){
+    disk=new Disk;
+    cpu=new Cpu;
+  }
+  public void start(){
+  		disk.start();
+  		cpu.start();
+      sout("computer  start")
+    }
+    public void shutdown（）
+    {
+    disk.shutdowm();
+    cpu.shutdown();
+    sout("disk shutdowm");
+    }
+}
+
+public class User{
+  public static void main(){
+   Computer  com=new Computer();
+   
+   com.start;
+   sout("=================")
+   
+   com.shutdown();
+  }
+  
+}
+
+```
+>这里的computer类充当了一个解耦的作用，关系都在computer中，体现出了外观模式
+###桥接模式
+>桥接模式就是将事物和具体的实现分开，使他们可以单独的使用变化
+
+```java
+  public interface Sourceable{
+  
+  		void method();
+  }
+  
+  public class Source1{
+    @Override
+    public void method(){
+      System.out.println("source1");
+    }
+  }
+  
+  public class Source2{
+    @Override
+    public void method(){
+     System.out.println("Source2");
+    }
+  }
+  
+  public abstract class Bridge{
+    private Sourceable  source;
+    public void method(){
+    source.method;
+    }
+    
+    public Soureceable getSource(){
+      return source;
+    }
+    public void setSource(Sourceable source){
+      this.source=source;
+    }
+  }
+  
+  public class MyBridge extend Bridge{
+  
+  		public void method（）{
+  			getSource.method();
+  		}
+  }
+  
+  
+  public  class User{
+  		public static void main(){
+  		Bridge  bridge=new MyBridge();
+  		
+  		Sourceable source=new Source1();
+  		
+  		bridge.setSource(source);
+  		bridge.method();
+  		
+  		Sourceable source2=new Source2();
+  		
+  		bridge.setSource(source2);
+  		bridge.method();
+  		}
+  }
+```
+>桥接模式： 通过对bridge的调用实现了对sourceable的两个实现类的调用
+
+###组合模式：
+
+组合模式用于将多个对象组合在一起进行的操作 ，例如二叉树 ，数等
+
+```java
+public class TreeNode{
+   private TreeNode  parent;
+   
+   private Vector<TreeNode> children=new Vector<TreeNode>;
+   
+   private String name;
+   
+   public TreeNode(String name){
+   	this.name=name;
+   }
+   
+   public void setName(String name){
+   	this.name=name;
+   }
+   
+   public String getName(){
+   	return name;
+   }
+   
+   public void addChildNode(TreeNode  node){
+   	children.add(node);
+   } 
+   
+   public void removeChildNode(TreeNdoe  node){
+   	children.remove(node);
+   }
+   
+   public Enumeration<TreeNode> getChildNode(){
+   	return  children.elements();
+   }
+}
+--------------------------------------
+public class Tree{
+ 	TreeNode root=null;
+ 	
+ 	pulic Tree(String name){
+ 		root=new TreeNode(name);
+ 	}
+	
+	public static void main(){
+		Tree  tree=new Tree("First");
+		
+		TreeNode treeNodeA=new TreeNode("A");
+		
+		TreeNode treeNodeB=new TreeNode("b");
+		
+		treeNodeA.add(treeNodeB);
+		
+		tree.root.add(treeNodeA);
+	}
+}
+
+```
+
+###享元模式：
+
+享元模式的作用就是实现对象的共享，即共享池，在系统中 对象多的时候可以减少内存的开销
+
+```
+
+public class ConnectionPool {  
+      
+    private Vector<Connection> pool;  
+      
+    /*公有属性*/  
+    private String url = "jdbc:mysql://localhost:3306/test";  
+    private String username = "root";  
+    private String password = "root";  
+    private String driverClassName = "com.mysql.jdbc.Driver";  
+  
+    private int poolSize = 100;  
+    private static ConnectionPool instance = null;  
+    Connection conn = null;  
+  
+    /*构造方法，做一些初始化工作*/  
+    private ConnectionPool() {  
+        pool = new Vector<Connection>(poolSize);  
+  
+        for (int i = 0; i < poolSize; i++) {  
+            try {  
+                Class.forName(driverClassName);  
+                conn = DriverManager.getConnection(url, username, password);  
+                pool.add(conn);  
+            } catch (ClassNotFoundException e) {  
+                e.printStackTrace();  
+            } catch (SQLException e) {  
+                e.printStackTrace();  
+            }  
+        }  
+    }  
+  
+    /* 返回连接到连接池 */  
+    public synchronized void release() {  
+        pool.add(conn);  
+    }  
+  
+    /* 返回连接池中的一个数据库连接 */  
+    public synchronized Connection getConnection() {  
+        if (pool.size() > 0) {  
+            Connection conn = pool.get(0);  
+            pool.remove(conn);  
+            return conn;  
+        } else {  
+            return null;  
+        }  
+    }  
+}  
+
+```
+>通过连接池的管理，实现了数据库连接的共享，不需要每一次都重新创建连接，节省了数据库重新创建的开销，提升了系统的性能!
+
+###策略设计模式：
+策略设计模式提供一系列的算法，并且将每一个算法分装起来，使他们可以相互替换，算法的变换不会影响到用户的算法，统一定义一个接口，实现类实现该接口，且可以设置一个抽象类，提供辅助函数
+
+```
+public interface ICalculator {  
+    public int calculate(String exp);  
+}  
+辅助类：
+
+public abstract class AbstractCalculator {  
+      
+    public int[] split(String exp,String opt){  
+        String array[] = exp.split(opt);  
+        int arrayInt[] = new int[2];  
+        arrayInt[0] = Integer.parseInt(array[0]);  
+        arrayInt[1] = Integer.parseInt(array[1]);  
+        return arrayInt;  
+    }  
+}  
+三个实现类：
+
+public class Plus extends AbstractCalculator implements ICalculator {  
+  
+    @Override  
+    public int calculate(String exp) {  
+        int arrayInt[] = split(exp,"\\+");  
+        return arrayInt[0]+arrayInt[1];  
+    }  
+}  
+
+public class Minus extends AbstractCalculator implements ICalculator {  
+  
+    @Override  
+    public int calculate(String exp) {  
+        int arrayInt[] = split(exp,"-");  
+        return arrayInt[0]-arrayInt[1];  
+    }  
+  
+}  
+
+public class Multiply extends AbstractCalculator implements ICalculator {  
+  
+    @Override  
+    public int calculate(String exp) {  
+        int arrayInt[] = split(exp,"\\*");  
+        return arrayInt[0]*arrayInt[1];  
+    }  
+}  
+简单的测试类：
+
+public class StrategyTest {  
+  
+    public static void main(String[] args) {  
+        String exp = "2+8";  
+        ICalculator cal = new Plus();  
+        int result = cal.calculate(exp);  
+        System.out.println(result);  
+    }  
+}  
+输出：10
+```
+>策略模式的决定权在与用户，系统本身提供一系列的算法，外部只需要按照自己的需求调用算法即可；
+
+###模板方法：
+模板方法是通过在一个抽象类中定义一个主方法，有若干个其他方法，可以是抽象的 也可以是具体的，通过一个子类继承抽象类，重写抽象方法，达到对子类的调用
+
+```
+public abstract class AbstractPlus{
+	public int calculate(String args1,String opt){
+	 		int array[]=split(arg1,opt);
+	 		return calculate(array[0],array[0])
+		}
+		
+	abstract int[] calculcatee(int args,int args2);
+	
+	public int[] split(String exp,String opt){  
+        String array[] = exp.split(opt);  
+        int arrayInt[] = new int[2];  
+        arrayInt[0] = Integer.parseInt(array[0]);  
+        arrayInt[1] = Integer.parseInt(array[1]);  
+        return arrayInt;  
+  				  }  
+			} 
+}
+
+-------------------------------
+public class Plus extends AbstractPlus{
+
+
+	@overide
+	public int[] calculcate(int args,int args2){
+	 return args+args2;
+	}
+	
+}
+
+public class	Test{
+  public static void main(String[] args){
+      AbstractPlus plus=new Plus();
+      plus.calculcate("0+9","\\+");
+  }
+}
+```
+###迭代子模式
+
+迭代子模式：顺序访问聚集中的对象，一是需要遍历的对象，即聚集对象，二是迭代器对象，用于对聚集对象进行遍历访问
+
+```JAVA
+public interface Icollection{
+	public Iterator interator();
+	//取得集合中的元素
+	public Objcet get(int i);
+	
+	//过去size
+	
+	public int size();
+}
+
+---------------
+public int Iterator{
+	public Objcet previous();
+	
+	public Objcet next();
+	
+	public boolean hasNext();
+	
+	public Object first();
+}
+
+--------------------
+public MyCollection implements Icollection{
+
+private String temp[]={“A”,"B","C"};
+	@Override
+	public Object get(int i){
+		return temp[i];
+	}
+	
+	@Override
+	
+	public Iterator iterator(){
+		return new MyIterator(this);
+	}
+	
+	@Override
+	public int size(){
+		return temp.length;
+	}
+}
+
+---------------
+
+public class MyIterator implements Iterator{
+	private Icollection  icollection;
+	private int pos=-1;
+	publcic MyIterator(Icollection icollection){
+		this.icollection=icollection;
+	}
+	@Override
+	public Object pervious(){
+		if(pos>0){
+			pos--;
+		}
+		reeturn icollection.get(pos);
+	}
+	
+	@Override
+	public Object next(){
+		if(pos>icollection.size()-1){
+			pos++;
+		}
+		return icollection.get(pos);
+	}
+	
+	@Override
+	
+	public boolean hasNext(){
+		if(pos<icollection.size()-1){
+		return turn;
+		}
+		
+		return false;
+	}
+	
+	@Override
+	public Object first(){
+		pos=0;
+		return icollection.get(pos);
+	}
+}
+--------------------------
+
+public class Test{
+	public static void main(String[] args){
+		Icollection icollection=new MyIcollection();
+		Iterator iterator=icollection.iterator();
+		while(iterator.hasNaxt()){
+			System.out.println(iterator.next());
+		}
+}
+```
+
+##责任链模式：
+
+责任链设计模式作用于类与类之间的传递，上一个类持有下一个类的引用，这样持续形成一个链，直到处理结果为止
+
+```JAVA `	
+
+public interface Handler{
+	pulic void operator();
+}
+==========================
+public abstract class AbastractHandler{
+	private Handler handler;
+	
+	public Handler getHandler(){
+		return handler;
+	}
+	
+	public void setHandler(Handler handler){
+		this.handler=handler;
+	}
+}
+========================
+
+pulic class MyHandler extends AbstractHandler impletements Handler{
+		private String name;
+		
+		public MyHandler(String name){
+			this.name=name;
+		}
+		
+		@Override
+		public void operator(){
+		  System.out.println(name+"============");
+		 	if(getHandler!=null){
+		 		getHandler.operator();
+		 	}
+		}
+}
+======================
+public class Test{
+	public static void main(){
+		MyHandler m1=new MyHandler("A");
+		MyHandler m2=new MyHandler("B");
+		MyHandler m3=new MyHandler("C");
+		
+		m1.setHandler(m2);
+		m2.setHandler(m3)	
+		m1.operator();		
+	}
+}
+
+```
+>链接上的请求可以是一条链，可以是一个树，还可以是一个环，模式本身不约束这个，需要我们自己去实现，同时，在一个时刻，命令只允许由一个对象传给另一个对象，而不允许传给多个对象。
+
+###命令模式：
+
+命令模式实现的就是在调用者和执行者相互解耦，就像长官给士兵下命令，不管士兵怎么实现，只需告诉结果就行，相互之间独立
+例如struts
+```java
+public interface Command{
+		public void exe();
+}
+=========================
+public class Reciver{
+	public void action(){
+		System.out.println("exe");
+	}
+}
+=========================
+
+public class MyConmmand impletements Command{
+	private Reciver reciver;
+	publlic MyCommand (Reciver reciver){
+		this.reciver=reciver;
+	}
+}
+
+===================================
+@Override
+public void exe(){
+	this.reciver.action();
+}
+========================
+public class Invoker(){
+	private  Command command;
+	
+	public Invoker(Command command){
+		this.command=command;
+	}
+	
+	public void action(){
+		command.exe();
+	}
+}
+
+==================================
+public class Test{
+	public static void main(String[] args){
+		Reciver reciver=new Reciver();
+		MyCommand command=new Command(reciver);
+		
+		Invoker invoker=new Invoker(command);
+		invoker.action();
+	}
+}
+
+```
+###备忘录模式：
+将某个类中的属性进行备份，在需要的时候恢复；假设A对象有属性value，我们需要将value值修改后又想重新恢复，这时候就需要将A->value备份，这时候需要一个B对象，用来存贮A对象的value值，需要C将备忘录保存下来，且只能保存，不能修改
+
+```java
+Original类是原始类，里面有需要保存的属性value及创建一个备忘录类，用来保存value值。Memento类是备忘录类，Storage类是存储备忘录的类，持有Memento类的实例
+=============
+public class Original{
+	private String vlaue;
+	
+	pulic void setValue(String value){
+		this.value=value;
+	}
+	public String getValue(){
+		return value;
+	}
+	
+	public Original(String value){
+		this.value=value;
+	} 
+	public Memento CreateMemto(){
+		return new Memento(value);
+	}
+	
+	public void restOldObject(Memento memento){
+		this.value=memento.getValue();
+	}
+}
+
+===================================
+
+public class Memento{
+	private String value;
+	public Memento(String value){
+		this.value=value;
+	}
+	pulic void setValue(String value){
+		this.value=value;
+	}
+	public String getValue(){
+		return value;
+	}
+}
+===========================
+
+public class Storage{
+	private Memento memento;
+	
+	public Storage(Memento memento){
+		this.memento=memento;
+	}
+	public void setMemento(Memento memento){
+		this.memento=memento;
+	}
+	public Memento getMemento(){
+		return memento;
+	}
+}
+
+=======================================
+
+public class Test{
+	public static void main(String[] args){
+		Original original=new Original("原始值");
+		Memento memento=original.createMemento;
+		Storage storage=new Storage(memento);
+		String firstValue=original.getValue();
+		original.setValue("新值");
+		
+		original.restOldObject(storage.getMemento());
+		original.getValue();
+	}
+}
+```
+###状态模式：
+当前对象的状态改变时，同时改变其行为例如qq的状态
+
+```java
+public class State{
+	private String value;
+	public void setValue(String vlaue){
+		this.value=value;
+	}
+	
+	public String getVlaue(){
+		return value;
+	}
+	
+	public void method1(){
+		System.out.println("状态一");
+	}
+	public void method2(){
+		System.out.println("状态二");
+	}
+}
+
+===================================
+
+public class  Context{
+	private State state;
+	
+	public void setState(State  state){
+		this.state=state;
+	}
+	
+	public State getState(){
+		return state;
+	}
+	public void method(){
+		if("state1".equals(state.getValue)){
+			state.method1();
+		}else {
+			state.method2();
+		}
+	}
+}
+===============================
+public class Test{
+	public static void main(Stirng[] args){
+		State state=new State("state1");
+		Context context=new Context(state);
+		context.method();
+		
+		state.setValue("ssss");
+		context.method();
+	}
+}
+```
+>利用状态模式区分不同状态对应的逻辑状态，提高代码的复用性
+###访问者模式 :
+
+访问者模式把数据模式和作用与结构上的操作解耦合，使操作集合可相对自由的演化。访问者模式适用于数据结构相对稳定算法又易变换的系统，因为访问者模式使得算法操作增加变得容易，若系统对象数据易于变换，经常有新的数据对象增加，不适合使用访问者模式；简单来说就是访问者无需更改原先的数据，动态的添加新的操作。
+
+```java
+
+public interface Visitor{
+	public void visit(Subject subject);
+}
+==========================
+public class MyVistor  implements Vistor{
+	public void visit(Subject subject){
+		System.out.println("访问者模式:访问者"+subject.getSubject);
+	}
+}
+
+======================
+public interface Subjcet{
+	public void accept(Visitor visitor);
+	
+	public String  getSubject();
+}
+
+============================
+
+public class MySubject implements	Subjcet{
+	public void accept(Visitor visitor){
+		visitor.visit(this);	
+	}
+	public String getSubjcet(){
+		return "hello";
+	}
+}
+
+================================
+public class Test{
+	public static void  main(String[] args){
+		Visitor visitor=new MyVisitor();
+		Subject subject=new MySubject();
+		subject.accept(visitor);
+	}
+}
+```
+>该模式适用场景：如果我们想为一个现有的类增加新功能，不得不考虑几个事情：1、新功能会不会与现有功能出现兼容性问题？2、以后会不会再需要添加？3、如果类不允许修改代码怎么办？面对这些问题，最好的解决方法就是使用访问者模式，访问者模式适用于数据结构相对稳定的系统，把数据结构和算法解耦
+
+### 中介者模式：
+
+>中介者模式用来降低类与类之间的耦合 ，如果类与类之间有依赖的话，不利于功能的拓展和维护，修改一个对象，其他关联的对象都得修改，使用中介者模式，只需关心和Mediator类之间的关系，类与类之间的关系调度给Mediator就行
+
+```java
+
+public interface Mediator{
+	public void createMediator();
+	
+	public void workAll();
+}
+==============================
+public class MyMediator implements Mediator{
+	private  User1 user1;
+	
+	private User2 user2;
+	
+	public User getUser1(){
+		return user1;
+	}
+	
+	public User getUser2(){
+	  return usr2;
+	}
+	
+	@Override
+	public void  createMediator(){
+		user1=new User1(this);
+		user2=new User2(this);
+		
+	} 
+	
+	@Override
+	public void workAll(){
+		user1.work();
+		
+		user2.work();
+	}
+}
+============================
+
+public  abstract User {
+	private Mediator mediator;
+	
+	public Mediator getMediator(){
+		return mediator;
+	}
+	
+	public  User(Mediator mediator){
+		this.mediator =mediator;
+	}
+	/**
+	*	共有的方法
+	**/
+	public abstract void work();
+}
+=============================
+
+public class User1  extends User{
+   
+   public User1(Mediator mediator){
+   	super(mediator);
+   }
+	@Override
+	public void work(){
+		System.out.println("User1  ---------->work");
+	}
+}
+==============================
+
+public class User2  extends User{
+   
+   public User2(Mediator mediator){
+   	super(mediator);
+   }
+	@Override
+	public void work(){
+		System.out.println("User2  ---------->work");
+	}
+}
+=================================
+
+public clas Test{
+	public static void main(String[] args){
+		Mediator mediator=new Mediator();
+		
+		mediator.createMediator();
+		
+		mediator.workAll();
+	}
+}
+```
+
+###解释器模式：用于OOP开发中的编译器的开发中
+
+```java
+public interface Expression{
+	public int interpret(Context context);   
+}
+
+============================
+
+public class Plus implememts Expression{
+	@Override
+	public int interpret(Context context){
+		return context.getNum1()+context.getNum2();
+	}
+}
+
+=================================
+
+public class Minus implements Expression{
+	@Override
+	public int interpret(Context context){
+		return context.getNum1()-context.getNum2();
+	}
+}
+=============================
+public class context{
+	private int num1;
+	
+	private int num2;
+	
+	public void setNum1(int num1){
+		this.num1=num1;
+	}
+	
+	public int getNum1(){
+		return num1;
+	}
+	
+	public void setNum2(int num2){
+		this.num2=num2;
+	}
+	public int getNum2(){
+		return num2;
+	}
+}
+========================
+public class Test {
+	public static void main(){
+		//8+2-9
+		int result=new Minus().interpret(new Context(new Plus(),interpret(new Context(9,2)),8)));
+
+	}	
+
+}
+```
+>解释器模式就是用来做各种各样的解释器
+
